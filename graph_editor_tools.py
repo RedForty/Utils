@@ -21,6 +21,13 @@ BACKGROUND_COLOR = (0x32A14B)
 FONT_COLOR = 'white'
 FONT = 'Roboto'
 
+START_FRAME = cmds.playbackOptions(q=True, minTime=True)
+END_FRAME = cmds.playbackOptions(q=True, maxTime=True)
+NON_CYCLING_CURVES = []
+TOLERANCE = 0.0000000001
+
+
+
 IN_TANGENT_TYPES  = [ "spline"
                     , "linear"
                     , "fast"
@@ -436,6 +443,85 @@ def toggle_channels(channels):
     cmds.channelBox(CHANNELBOX, edit=True, select=channels_to_select, update=True)
 
 
+
+# --------------------------------------------------------------------------- #
+# Clean Cycles
+def clean_selection():
+    global NON_CYCLING_CURVES
+    NON_CYCLING_CURVES  = []
+
+    ctrls = cmds.ls(sl=True)
+    if not ctrls:
+        print("No controls selected!")
+        return
+
+    curves_to_process = []
+    for ctrl in ctrls:
+        curves = []
+        curves = cmds.keyframe(ctrl, selected=True, q=True, name=True) or []
+        curves_to_process.extend(curves)
+
+    if not curves_to_process:
+        print("No curves selected!")
+        return
+
+    for curve in curves_to_process:
+        _normalize_cycle(curve)
+
+    if NON_CYCLING_CURVES:
+        cmds.warning("Non cycling curves detected!")
+        print(NON_CYCLING_CURVES)
+        result = cmds.confirmDialog( title='Warning', message='Select non-cycling controls?', button=['Yes','No'], defaultButton='Yes', cancelButton='No', dismissString='No' )
+        if result == 'Yes':
+            cmds.select(NON_CYCLING_CURVES)
+    else:
+        print("Success probably!")
+
+# --------------------------------------------------------------------------- #
+# The process that does the work
+def _normalize_cycle(curve):
+    # prime the pump
+    global NON_CYCLING_CURVES
+
+    # cycle_length = end_frame - start_frame
+    keys = cmds.keyframe(curve, q=True)
+    last_key = keys[-1]
+    first_key = keys[0]
+
+    if first_key >= START_FRAME and last_key > END_FRAME:
+        # Normalize post-end-frame
+        cmds.setKeyframe(curve, time=(END_FRAME,), insert=True)
+        cmds.copyKey(curve, time=(END_FRAME, last_key))
+        cmds.pasteKey(curve, time=(START_FRAME,), option="merge")
+        cmds.cutKey(curve, time=(last_key, END_FRAME+1))
+
+    elif first_key < START_FRAME and last_key <= END_FRAME:
+        # Normalize pre-start-frame
+        cmds.setKeyframe(curve, time=(START_FRAME,), insert=True)
+        cmds.copyKey(curve, time=(first_key, START_FRAME))
+        cmds.pasteKey(curve, time=(last_key,), option="merge")
+        cmds.cutKey(curve, time=(first_key, START_FRAME-1))
+
+    elif first_key < START_FRAME and last_key > END_FRAME:
+        # Assume the cycle is already good and just trim the outside edges
+        cmds.setKeyframe(curve, time=(START_FRAME,), insert=True)
+        cmds.setKeyframe(curve, time=(END_FRAME,), insert=True)
+        cmds.keyTangent(curve, e=True, time=(END_FRAME,), itt="fixed", ott="fixed")
+        cmds.cutKey(curve, time=(first_key, START_FRAME-1))
+        cmds.cutKey(curve, time=(END_FRAME+1, last_key))
+    elif first_key == START_FRAME and last_key == END_FRAME:
+        # Curve is already the proper length and within the bounds
+        pass
+    else:
+        NON_CYCLING_CURVES.append(curve)
+        print "%s not a valid curve." % curve
+
+    # Then check the curve and add it to the list if it doesn't cycle
+    value_start = cmds.keyframe(curve, q=True, time=(START_FRAME,), valueChange=True)
+    value_end = cmds.keyframe(curve, q=True, time=(END_FRAME,), valueChange=True)
+    
+    if abs(value_start[0] - value_end[0]) > TOLERANCE: # Because of floating point numbers
+        NON_CYCLING_CURVES.append(curve)
 
 
 
