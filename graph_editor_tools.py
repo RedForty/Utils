@@ -1,4 +1,4 @@
-# =========================================================================== #
+# ============================================================================ #
 # My collection of graph editor tools
 from maya import cmds, mel
 from functools import wraps
@@ -16,7 +16,7 @@ class Vividict(dict):
 # Globals ==================================================================== #
 
 ANIM_CURVE_EDITOR = 'graphEditor1GraphEd'
-CHANNELBOX = mel.eval('$temp=$gChannelBoxName')
+CHANNELBOX = mel.eval('$cbtemp=$gChannelBoxName')
 BACKGROUND_COLOR = (0x32A14B)
 FONT_COLOR = 'white'
 FONT = 'Roboto'
@@ -25,8 +25,6 @@ START_FRAME = cmds.playbackOptions(q=True, minTime=True)
 END_FRAME = cmds.playbackOptions(q=True, maxTime=True)
 NON_CYCLING_CURVES = []
 TOLERANCE = 0.0000000001
-
-
 
 IN_TANGENT_TYPES  = [ "spline"
                     , "linear"
@@ -73,7 +71,6 @@ VALID_ATTRS       = [ 'translateX'
                     ]
 
 SELECTED_KEYS = Vividict()
-from maya import cmds, mel
 
 # ============================================================================ #
 # Wrappers =================================================================== #
@@ -161,8 +158,8 @@ def do_viewport_isolate(currentPanel):
         cmds.isolateSelect(currentPanel, addSelected=True)
         cmds.isolateSelect(currentPanel, update=True)
 
+# @restore_ge_selection # Broken in 2018
 @undo        
-@restore_ge_selection
 def do_ge_isolate():
     # GE isolating acts differently. There is a job number for it so just toggle it.
     gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $temp=$gUnisolateJobNum;')
@@ -308,7 +305,7 @@ def toggle_normalized():
 @undo
 def scale_tangent_to_value(value):
     current_channels = cmds.keyframe(q=True, selected=True, name=True)
-    if not current_channels: print "Only works on selected keys/curves"; return
+    if not current_channels: print("Only works on selected keys/curves"); return
     keys_selected = Vividict()
     for channel in current_channels:
         keys = cmds.keyframe(channel, q=True, selected=True, indexValue=True)
@@ -319,7 +316,8 @@ def scale_tangent_to_value(value):
             keys_selected[channel][float(key)]['tangent_weights'] = cmds.keyTangent(channel, index=(float(key),), q=True, inWeight=True, outWeight=True)
             keys_selected[channel][float(key)]['lock']            = cmds.keyTangent(channel, index=(float(key),), q=True, lock=True)
     
-            cmds.keyTangent(itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1])
+            cmds.keyTangent(channel, index=(float(key),), itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1]) # This breaks in 2020
+            # cmds.keyTangent(itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1])
     
     keys_modified = Vividict()
     for channel in current_channels:
@@ -344,7 +342,7 @@ def scale_tangent_to_value(value):
 
 
 # ---------------------------------------------------------------------------- #
-# Angle current tangent handle to a value
+# Angle current tangent handle to a value 
 
 def map_from_to(value, leftMin, leftMax, rightMin, rightMax):
     # Figure out how 'wide' each range is
@@ -360,7 +358,7 @@ def get_anim_data():
     keys_selected = Vividict()
 
     current_channels = cmds.keyframe(q=True, selected=True, name=True) or []
-    if not current_channels: print "Only works on selected keys/curves"; return
+    if not current_channels: print("Only works on selected keys/curves"); return
     for channel in current_channels:
         keys = cmds.keyframe(channel, q=True, selected=True, indexValue=True)
         for key in keys:
@@ -426,7 +424,7 @@ cmds.showWindow()
 
 
 # ---------------------------------------------------------------------------- #
-# Angle current tangent handle to a value
+# Toggle selected channels in the GE
 
 def toggle_channels(channels):
     '''
@@ -435,21 +433,28 @@ def toggle_channels(channels):
     '''
     if channels == False:
         cmds.channelBox(CHANNELBOX, edit=True, select=False, update=True)
+        mel.eval('syncChannelBoxFcurveEd') # For 2018
         return
     if not isinstance(channels, list): channels = [channels]
     valid_channels = [c for c in channels if c in VALID_ATTRS]
     nodes = cmds.ls(selection=True)
     channels_to_select = ['{}.{}'.format(n, c) for c in valid_channels for n in nodes]
     cmds.channelBox(CHANNELBOX, edit=True, select=channels_to_select, update=True)
+    mel.eval('syncChannelBoxFcurveEd') # For 2018
+
 
 
 
 # --------------------------------------------------------------------------- #
-# Clean Cycles
-def clean_selection():
+# Crop selected curves to frame range, cutting/pasting from outside to inside
+def crop_cycle():
     global NON_CYCLING_CURVES
     NON_CYCLING_CURVES  = []
-
+    global START_FRAME
+    START_FRAME = cmds.playbackOptions(q=True, minTime=True)
+    global END_FRAME
+    END_FRAME = cmds.playbackOptions(q=True, maxTime=True)
+    
     ctrls = cmds.ls(sl=True)
     if not ctrls:
         print("No controls selected!")
@@ -483,7 +488,6 @@ def _normalize_cycle(curve):
     # prime the pump
     global NON_CYCLING_CURVES
 
-    # cycle_length = end_frame - start_frame
     keys = cmds.keyframe(curve, q=True)
     last_key = keys[-1]
     first_key = keys[0]
@@ -491,12 +495,35 @@ def _normalize_cycle(curve):
     if first_key >= START_FRAME and last_key > END_FRAME:
         # Normalize post-end-frame
         cmds.setKeyframe(curve, time=(END_FRAME,), insert=True)
+        
+        # Save tangent info
+        tangent_data = _save_tangent_data(curve, last_key)
+        # Apply tangent info
+        cmds.keyTangent(curve, e=True, time=(first_key,), lock=False)
+        cmds.keyTangent(curve, e=True, time=(first_key,), ott='fixed')
+        cmds.keyTangent(curve, e=True, time=(first_key,), itt='fixed')
+        cmds.keyTangent(curve, e=True, time=(first_key,), inAngle=tangent_data[curve, last_key]['in_angle'][0])
+        if tangent_data[curve, last_key]['weighted'][0]:
+            cmds.keyTangent(curve, e=True, time=(first_key,), inWeight=tangent_data[curve, last_key]['in_weight'][0])
+        
+        # Save tangent info
+        tangent_data = _save_tangent_data(curve, first_key)
+        # Apply tangent info
+        cmds.keyTangent(curve, e=True, time=(last_key,), lock=False)
+        cmds.keyTangent(curve, e=True, time=(last_key,), ott='fixed')
+        cmds.keyTangent(curve, e=True, time=(last_key,), itt='fixed')
+        cmds.keyTangent(curve, e=True, time=(last_key,), outAngle=tangent_data[curve, first_key]['out_angle'][0])
+        if tangent_data[curve, first_key]['weighted'][0]:
+            cmds.keyTangent(curve, e=True, time=(last_key,), outWeight=tangent_data[curve, first_key]['out_weight'][0])
+
         cmds.copyKey(curve, time=(END_FRAME, last_key))
         cmds.pasteKey(curve, time=(START_FRAME,), option="merge")
         cmds.cutKey(curve, time=(last_key, END_FRAME+1))
 
     elif first_key < START_FRAME and last_key <= END_FRAME:
         # Normalize pre-start-frame
+        cmds.copyKey(curve, time=(last_key,))
+        cmds.pasteKey(curve, time=(first_key,), option="merge")
         cmds.setKeyframe(curve, time=(START_FRAME,), insert=True)
         cmds.copyKey(curve, time=(first_key, START_FRAME))
         cmds.pasteKey(curve, time=(last_key,), option="merge")
@@ -507,6 +534,7 @@ def _normalize_cycle(curve):
         cmds.setKeyframe(curve, time=(START_FRAME,), insert=True)
         cmds.setKeyframe(curve, time=(END_FRAME,), insert=True)
         cmds.keyTangent(curve, e=True, time=(END_FRAME,), itt="fixed", ott="fixed")
+        cmds.keyTangent(curve, e=True, time=(START_FRAME,), itt="fixed", ott="fixed")
         cmds.cutKey(curve, time=(first_key, START_FRAME-1))
         cmds.cutKey(curve, time=(END_FRAME+1, last_key))
     elif first_key == START_FRAME and last_key == END_FRAME:
@@ -514,7 +542,7 @@ def _normalize_cycle(curve):
         pass
     else:
         NON_CYCLING_CURVES.append(curve)
-        print "%s not a valid curve." % curve
+        print("%s not a valid curve." % curve)
 
     # Then check the curve and add it to the list if it doesn't cycle
     value_start = cmds.keyframe(curve, q=True, time=(START_FRAME,), valueChange=True)
@@ -523,8 +551,71 @@ def _normalize_cycle(curve):
     if abs(value_start[0] - value_end[0]) > TOLERANCE: # Because of floating point numbers
         NON_CYCLING_CURVES.append(curve)
 
+def _save_tangent_data(curve, time):
+    weighted = cmds.keyTangent(curve, q=True, time=(time,), weightedTangents=True)
+    if weighted:
+        out_weight = cmds.keyTangent(curve, q=True, time=(time,), outWeight=True)
+        in_weight = cmds.keyTangent(curve, q=True, time=(time,), inWeight=True)
+    out_angle = cmds.keyTangent(curve, q=True, time=(time,), outAngle=True)
+    in_angle = cmds.keyTangent(curve, q=True, time=(time,), inAngle=True)
+    tangent_data = {}
+    tangent_data[curve, time] = { "weighted" : weighted
+                                , "out_angle" : out_angle
+                                , "in_angle" : in_angle
+                                , "out_weight" : out_weight
+                                , "in_weight" : in_weight
+                                }
+    return tangent_data
+
+# --------------------------------------------------------------------------- #
+# Based on ack_SliceCurves
+@undo
+def slice_curves():
+    sel = cmds.ls(sl=1)
+    if not sel: return None
+    
+    objects_to_skip = []
+    # Does the object have a key on it to begin with?
+    for obj in sel:
+        keyCount = cmds.keyframe(obj, q=True, kc=True)
+        if not keyCount: # Set an initial keyframe
+            cmds.setKeyframe(obj)
+            objects_to_skip.append(obj)
+    
+    # Get selected curves in GE
+    selectedCurves = cmds.keyframe(selected=True, q=True, name=True) or [] # return curves of selected keys
+    if selectedCurves:
+        cmds.setKeyframe(selectedCurves, insert=True)
+        return True
+
+    # Get selection from GE_outliner
+    ge_outliner_selection = mel.eval("string $temp[] = `selectionConnection -q -object graphEditor1FromOutliner`;")
+    if ge_outliner_selection:
+        cmds.setKeyframe(ge_outliner_selection, insert=True)
+        return True
+
+    # Get selection from channelbox
+    channelbox_selection = []
+    cb_attr = _get_selected_channels()
+    if cb_attr:
+        for obj in sel:
+            for attr in cb_attr:
+                channelbox_selection.append(obj + "." + attr)
+    if channelbox_selection:
+        cmds.setKeyframe(channelbox_selection, insert=True)
+        return True
+
+    # Ok, maybe no selection. Just insert all the ones we didn't initially do a setkey
+    for obj in sel:
+        if obj not in objects_to_skip:
+            cmds.setKeyframe(obj, insert=True)
 
 
+def _get_selected_channels():
+	attrs = cmds.channelBox(CHANNELBOX, q=True, sma=True)
+	if not attrs:
+		return []
+	return attrs
 
 
 # EoF
