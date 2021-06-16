@@ -1,5 +1,6 @@
 # ============================================================================ #
-# My collection of graph editor tools
+# My collection of graph editor tools ======================================== #
+
 from maya import cmds, mel
 from functools import wraps
 
@@ -124,6 +125,21 @@ def restore_ge_selection(func):
 
 
 # ---------------------------------------------------------------------------- #
+# Thank you Freya Holmer | Neat Corp
+# https://youtu.be/NzjF1pdlK7Y
+
+def lerp(a, b, t):
+    return ((1.0 - t) * a + b * t)
+
+def inv_lerp(a, b, v):
+    return ((v - a) / (b - a))
+
+def remap(iMin, iMax, oMin, oMax, v):
+    t = inv_lerp(iMin, iMax, v)
+    return lerp(oMin, oMax, t)
+
+
+# ---------------------------------------------------------------------------- #
 # Launch the GE - depends on maya version
 
 def launch_graphEditor():
@@ -162,7 +178,8 @@ def do_viewport_isolate(currentPanel):
 @undo        
 def do_ge_isolate():
     # GE isolating acts differently. There is a job number for it so just toggle it.
-    gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $temp=$gUnisolateJobNum;')
+    # gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $temp=$gUnisolateJobNum;')
+    gUnisolateJobNum = mel.eval('$isotemp=$gUnisolateJobNum;')
     if int(gUnisolateJobNum) > 0:
         mel.eval('isolateAnimCurve false graphEditor1FromOutliner graphEditor1GraphEd;')
     else:
@@ -573,15 +590,37 @@ def _save_tangent_data(curve, time):
 def slice_curves():
     sel = cmds.ls(sl=1)
     if not sel: return None
-    
+
     objects_to_skip = []
     # Does the object have a key on it to begin with?
     for obj in sel:
-        keyCount = cmds.keyframe(obj, q=True, kc=True)
-        if not keyCount: # Set an initial keyframe
-            cmds.setKeyframe(obj)
-            objects_to_skip.append(obj)
-    
+        shape_keyables = []
+        shapes = cmds.listRelatives(obj, shapes=True)
+        for shape in shapes:
+            # shape = 'ARCT_WelderBot_01_rig:backFoot_01FK_L_CTRLShape1'
+            keyCountShape = cmds.keyframe(shape, q=True, kc=True, shape=True)
+            found = cmds.listAnimatable(shape) or []
+            if found and not keyCountShape:
+                shape_keyables.append(shape)
+
+        keyCountCtrl = cmds.keyframe(obj, q=True, kc=True, shape=False)
+        if shape_keyables:
+            keyCountShape = cmds.keyframe(shape_keyables, q=True, kc=True, shape=True)
+            if keyCountCtrl == 0 and keyCountShape > 0: # Keys on the shape node but not on the ctrl
+                cmds.setKeyframe(obj, breakdown=False, hierarchy='none', controlPoints=False, shape=False)
+                objects_to_skip.append(obj)
+            if keyCountCtrl == 0 and keyCountShape == 0:
+                cmds.setKeyframe(obj, breakdown=False, hierarchy='none', controlPoints=False, shape=True)
+                objects_to_skip.append(obj)
+            if keyCountCtrl > 0 and keyCountShape == 0:
+                for shape in shape_keyables:
+                    cmds.setKeyframe(shape, breakdown=False, hierarchy='none', controlPoints=False, shape=True)
+        else:
+            keyCountCtrl = cmds.keyframe(obj, q=True, kc=True, shape=False)
+            if not keyCountCtrl:
+                cmds.setKeyframe(obj, breakdown=False, hierarchy='none', controlPoints=False, shape=False)
+
+
     # Get selected curves in GE
     selectedCurves = cmds.keyframe(selected=True, q=True, name=True) or [] # return curves of selected keys
     if selectedCurves:
@@ -589,33 +628,47 @@ def slice_curves():
         return True
 
     # Get selection from GE_outliner
-    ge_outliner_selection = mel.eval("string $temp[] = `selectionConnection -q -object graphEditor1FromOutliner`;")
-    if ge_outliner_selection:
-        cmds.setKeyframe(ge_outliner_selection, insert=True)
-        return True
+    # ge_outliner_selection = mel.eval("string $temp[] = `selectionConnection -q -object graphEditor1FromOutliner`;")
+    # if ge_outliner_selection:
+    #     cmds.setKeyframe(ge_outliner_selection, insert=True)
+    #     return True
 
     # Get selection from channelbox
     channelbox_selection = []
-    cb_attr = _get_selected_channels()
-    if cb_attr:
+    cb_attr_main, cb_attr_shapes = _get_selected_channels()
+    if cb_attr_main:
         for obj in sel:
-            for attr in cb_attr:
-                channelbox_selection.append(obj + "." + attr)
+            for attr in cb_attr_main:
+                if cmds.objExists(obj + "." + attr):
+                    channelbox_selection.append(obj + "." + attr)
+    if cb_attr_shapes:
+        for obj in sel:
+            shape_nodes = cmds.listRelatives(obj, shapes=True)
+            for shape_node in shape_nodes:
+                for attr in cb_attr_shapes:
+                    if cmds.objExists(shape_node + "." + attr):
+                        channelbox_selection.append(shape_node + "." + attr)
+
     if channelbox_selection:
-        cmds.setKeyframe(channelbox_selection, insert=True)
+        for attr in channelbox_selection:
+            if cmds.keyframe(attr, q=True, kc=True):
+                cmds.setKeyframe(channelbox_selection, insert=True)
+            else:
+                cmds.setKeyframe(channelbox_selection)
         return True
 
     # Ok, maybe no selection. Just insert all the ones we didn't initially do a setkey
     for obj in sel:
         if obj not in objects_to_skip:
-            cmds.setKeyframe(obj, insert=True)
+            cmds.setKeyframe(obj, insert=True, shape=True)
 
 
 def _get_selected_channels():
-	attrs = cmds.channelBox(CHANNELBOX, q=True, sma=True)
-	if not attrs:
-		return []
-	return attrs
+
+    attrs_main = cmds.channelBox(CHANNELBOX, q=True, sma=True) or []
+    attrs_shape = cmds.channelBox(CHANNELBOX, q=True, ssa=True) or []
+    return attrs_main, attrs_shape
+
 
 
 # EoF
