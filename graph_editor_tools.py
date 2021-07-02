@@ -178,8 +178,8 @@ def do_viewport_isolate(currentPanel):
 @undo        
 def do_ge_isolate():
     # GE isolating acts differently. There is a job number for it so just toggle it.
-    # gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $temp=$gUnisolateJobNum;')
-    gUnisolateJobNum = mel.eval('$isotemp=$gUnisolateJobNum;')
+    gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $isotemp=$gUnisolateJobNum;')
+    # gUnisolateJobNum = mel.eval('$isotemp=$gUnisolateJobNum;')
     if int(gUnisolateJobNum) > 0:
         mel.eval('isolateAnimCurve false graphEditor1FromOutliner graphEditor1GraphEd;')
     else:
