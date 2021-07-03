@@ -661,7 +661,14 @@ def slice_curves():
     for obj in sel:
         if obj not in objects_to_skip:
             cmds.setKeyframe(obj, insert=True, shape=True)
-
+    '''
+    # We need a way of accounting for MMB drag set-key override. Comparing these two values will do it.
+    # Refer to Guppy canInsert() for more into
+    oldValue = cmds.keyframe(obj + '.tx', query=1, eval=1)
+    # # GetAttr returns a single value if only one.  Otherwise, a list of
+    # # tuples ex: [(0, 0, 0)]
+    newValue = cmds.getAttr(obj + '.tx')
+    '''
 
 def _get_selected_channels():
 
