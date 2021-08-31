@@ -1,4 +1,26 @@
+# ==================================================================== #
+'''
+- Subframe Scrubber -
+Creates a button next to the rangeslider that lets you toggle
+timeline snapping
+
+- How to install -
+Place in your ~/maya/scripts folder
+
+- How to use -
+Run this PYTHON code in your userSetup.py file or shelf button:
+
+from maya import cmds
+import ui_timelineSnapButton
+cmds.evalDeferred('ui_timelineSnapButton.create_timelineSnapButton()')
+
+'''
+# ==================================================================== #
+
+
 from maya import cmds, mel
+
+
 
 SNAP_BUTTON  = 'toggleTimelineSnap'
 SLIDER       = mel.eval('$tempSlider = $gPlayBackSlider')
