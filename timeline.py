@@ -89,12 +89,20 @@ def next_key():
     updateVars()
     cmds.undoInfo(swf=False)
     frame = cmds.findKeyframe(timeSlider=True, which="next")
-    cmds.currentTime(frame, e=1)
+    # Returns current frame if it can't find a key
+    if frame == cmds.currentTime(q=True):
+        cmds.currentTime(max_time, e=1) # Just go to the end
+    else:
+        cmds.currentTime(frame, e=1)
     cmds.undoInfo(swf=True)
 
 def previous_key():
     updateVars()
     cmds.undoInfo(swf=False)
     frame = cmds.findKeyframe(timeSlider=True, which="previous")
-    cmds.currentTime(frame, e=1)
+    # Returns current frame if it can't find a key
+    if frame == cmds.currentTime(q=True):
+        cmds.currentTime(min_time, e=1) # Go to the beginning
+    else:
+        cmds.currentTime(frame, e=1)
     cmds.undoInfo(swf=True)
