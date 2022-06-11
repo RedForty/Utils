@@ -34,10 +34,13 @@ class Example(QtWidgets.QDialog):
         self.margin = 20
         
         self.x1 = 200
-        self.y1 = 0 + self.margin
+        self.y1 = 200
         
         self.x2 = 200
-        self.y2 = 400 - (self.margin)
+        self.y2 = 200
+        
+        self.red  = QtGui.QColor(250, 0, 0  , 150)
+        self.blue = QtGui.QColor(  0, 0, 255, 150)
         
         self.initUI()
 
@@ -52,12 +55,21 @@ class Example(QtWidgets.QDialog):
         qp = QtGui.QPainter()
         qp.begin(self)
         qp.setRenderHint(QtGui.QPainter.Antialiasing)
+        
         self.drawRectangle(qp, self.margin, self.margin, self.geometry().width()-(2*self.margin), self.geometry().height()-(2*self.margin))
-        self.drawBezierCurve(qp, self.x1, self.y1, self.x2, self.y2)
-        self.drawLine(qp, self.margin, self.margin, self.x1, self.y1)
-        self.drawLine(qp, 400 - (self.margin), 400 - (self.margin), self.x2, self.y2)
-        self.drawDots(qp, self.x1, self.y1)
-        self.drawDots(qp, self.x2, self.y2)
+        
+        self.drawBezierCurve(qp, self.x1, self.margin, self.x2, 400 - self.margin)
+        self.drawLine(qp, self.margin, self.margin, self.x1, self.margin)
+        self.drawLine(qp, 400 - self.margin, 400 - self.margin, self.x2, 400 - self.margin)
+        self.drawDots(qp, self.x1, self.margin, self.red)
+        self.drawDots(qp, self.x2, 400 - self.margin, self.red)
+        
+        self.drawBezierCurve(qp, self.margin, self.y1, 400 - self.margin, self.y2)
+        self.drawLine(qp, self.margin, self.margin, self.margin, self.y1)
+        self.drawLine(qp, 400 - self.margin, 400 - self.margin, 400 - self.margin, self.y2)
+        self.drawDots(qp, self.margin, self.y1, self.blue)
+        self.drawDots(qp, 400 - self.margin, self.y2, self.blue)
+        
         qp.end()        
 
 
@@ -72,8 +84,9 @@ class Example(QtWidgets.QDialog):
         qp.setBrush(QtCore.Qt.NoBrush)
 
     
-    def drawDots(self, qp, x, y):
-        pen = QtGui.QPen(QtCore.Qt.red)
+    def drawDots(self, qp, x, y, color):
+        pen = QtGui.QPen()
+        pen.setColor(color)
         pen.setCapStyle(QtCore.Qt.RoundCap)
         pen.setWidth(10)
         qp.setPen(pen)
@@ -81,6 +94,10 @@ class Example(QtWidgets.QDialog):
 
 
     def drawBezierCurve(self, qp, x1, y1, x2, y2):
+        pen = QtGui.QPen()
+        pen.setColor(QtGui.QColor(192, 192, 192))
+        pen.setWidth(1)
+        qp.setPen(pen)
         path = QtGui.QPainterPath()
         path.moveTo(self.margin, self.margin)
         path.cubicTo(x1, y1, x2, y2, 400 - (self.margin), 400 - (self.margin))
@@ -92,7 +109,7 @@ class Example(QtWidgets.QDialog):
         pen.setCapStyle(QtCore.Qt.RoundCap)
         pen.setStyle(QtCore.Qt.DotLine)
         pen.setColor(QtGui.QColor(192, 192, 192))
-        pen.setWidth(1)
+        pen.setWidth(2)
         qp.setPen(pen)
         
         path = QtGui.QPainterPath()
@@ -103,20 +120,26 @@ class Example(QtWidgets.QDialog):
         
     def mouseMoveEvent(self, pos):
         
-        # width = self.geometry().width()
+        width = self.geometry().width()
         height = self.geometry().height()
         
         # Start doing math here to symmetrize the vertical
         # and do opposite the horizontal
         
-        # percentageX = pos.x() / width
+        percentageX = pos.x() / width
         percentageY = pos.y() / height
         
         x1Value = min(max(self.margin, pos.x() * percentageY), 400 - self.margin)
         x2Value = min(max(self.margin, pos.x() * (1.0-percentageY)), 400 - self.margin)
+        
+        y1Value = min(max(self.margin, pos.y() * percentageX), 400 - self.margin)
+        y2Value = min(max(self.margin, pos.y() * (1.0-percentageX)), 400 - self.margin)
 
         self.x1 = x1Value
         self.x2 = x2Value 
+        
+        self.y1 = y1Value
+        self.y2 = y2Value 
         
         self.update() # Repaint
 
