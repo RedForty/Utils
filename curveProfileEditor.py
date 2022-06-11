@@ -31,6 +31,9 @@ class Example(QtWidgets.QDialog):
         self.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         
+        self.lmb = True
+        self.rmb = True
+        
         self.margin = 20
         
         self.x1 = 200
@@ -47,6 +50,7 @@ class Example(QtWidgets.QDialog):
 
     def initUI(self):
         self.setGeometry(300, 300, 400, 400)
+        self.setFixedSize(400, 400)
         self.setWindowTitle('Bezier curve')
         self.show()
 
@@ -58,17 +62,19 @@ class Example(QtWidgets.QDialog):
         
         self.drawRectangle(qp, self.margin, self.margin, self.geometry().width()-(2*self.margin), self.geometry().height()-(2*self.margin))
         
-        self.drawBezierCurve(qp, self.x1, self.margin, self.x2, 400 - self.margin)
-        self.drawLine(qp, self.margin, self.margin, self.x1, self.margin)
-        self.drawLine(qp, 400 - self.margin, 400 - self.margin, self.x2, 400 - self.margin)
-        self.drawDots(qp, self.x1, self.margin, self.red)
-        self.drawDots(qp, self.x2, 400 - self.margin, self.red)
+        if self.lmb:
+            self.drawBezierCurve(qp, self.x1, self.margin, self.x2, 400 - self.margin)
+            self.drawLine(qp, self.margin, self.margin, self.x1, self.margin)
+            self.drawLine(qp, 400 - self.margin, 400 - self.margin, self.x2, 400 - self.margin)
+            self.drawDots(qp, self.x1, self.margin, self.red)
+            self.drawDots(qp, self.x2, 400 - self.margin, self.red)
         
-        self.drawBezierCurve(qp, self.margin, self.y1, 400 - self.margin, self.y2)
-        self.drawLine(qp, self.margin, self.margin, self.margin, self.y1)
-        self.drawLine(qp, 400 - self.margin, 400 - self.margin, 400 - self.margin, self.y2)
-        self.drawDots(qp, self.margin, self.y1, self.blue)
-        self.drawDots(qp, 400 - self.margin, self.y2, self.blue)
+        if self.rmb:
+            self.drawBezierCurve(qp, self.margin, self.y1, 400 - self.margin, self.y2)
+            self.drawLine(qp, self.margin, self.margin, self.margin, self.y1)
+            self.drawLine(qp, 400 - self.margin, 400 - self.margin, 400 - self.margin, self.y2)
+            self.drawDots(qp, self.margin, self.y1, self.blue)
+            self.drawDots(qp, 400 - self.margin, self.y2, self.blue)
         
         qp.end()        
 
@@ -140,8 +146,22 @@ class Example(QtWidgets.QDialog):
         
         self.y1 = y1Value
         self.y2 = y2Value 
-        
+            
         self.update() # Repaint
+
+
+    def mousePressEvent(self, event):
+        check  = QtWidgets.QApplication.instance().mouseButtons()
+        self.lmb  = bool(QtCore.Qt.LeftButton & check)
+        self.rmb  = bool(QtCore.Qt.RightButton & check)
+        
+        super(Example, self).mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        check  = QtWidgets.QApplication.instance().mouseButtons()
+        self.lmb  = bool(QtCore.Qt.LeftButton & check)
+        self.rmb  = bool(QtCore.Qt.RightButton & check)
+        super(Example, self).mouseReleaseEvent(event)
 
         
 def main():
