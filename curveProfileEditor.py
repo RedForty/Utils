@@ -11,6 +11,18 @@ from __future__ import division # Need to get floats when dividing intergers
 from Qt import QtWidgets, QtGui, QtCore, QtCompat
 import maya.OpenMayaUI as mui
 
+# Thank you Freya Holmer | Neat Corp
+# https://youtu.be/NzjF1pdlK7Y
+
+def lerp(a, b, t):
+    return ((1.0 - t) * a + b * t)
+    
+def inv_lerp(a, b, v):
+    return ((v - a) / (b - a))
+
+def remap(iMin, iMax, oMin, oMax, v):
+    t = inv_lerp(iMin, iMax, v)
+    return lerp(oMin, oMax, t)
 
 def _get_maya_window():
     ptr = mui.MQtUtil.mainWindow()
@@ -64,6 +76,7 @@ class Example(QtWidgets.QDialog):
         
         if self.lmb:
             self.drawBezierCurve(qp, self.x1, self.margin, self.x2, 400 - self.margin)
+            
             self.drawLine(qp, self.margin, self.margin, self.x1, self.margin)
             self.drawLine(qp, 400 - self.margin, 400 - self.margin, self.x2, 400 - self.margin)
             self.drawDots(qp, self.x1, self.margin, self.red)
@@ -71,6 +84,7 @@ class Example(QtWidgets.QDialog):
         
         if self.rmb:
             self.drawBezierCurve(qp, self.margin, self.y1, 400 - self.margin, self.y2)
+            
             self.drawLine(qp, self.margin, self.margin, self.margin, self.y1)
             self.drawLine(qp, 400 - self.margin, 400 - self.margin, 400 - self.margin, self.y2)
             self.drawDots(qp, self.margin, self.y1, self.blue)
@@ -132,20 +146,23 @@ class Example(QtWidgets.QDialog):
         # Start doing math here to symmetrize the vertical
         # and do opposite the horizontal
         
-        percentageX = pos.x() / width
-        percentageY = pos.y() / height
+        pX = pos.x() / width 
+        pY = pos.y() / height
         
-        x1Value = min(max(self.margin, pos.x() * percentageY), 400 - self.margin)
-        x2Value = min(max(self.margin, pos.x() * (1.0-percentageY)), 400 - self.margin)
+        percentageX = remap(0.0, 1.0, 0.0, 1.0, pX)
+        percentageY = remap(0.0, 1.0, 0.0, 1.0, pY)
         
-        y1Value = min(max(self.margin, pos.y() * percentageX), 400 - self.margin)
-        y2Value = min(max(self.margin, pos.y() * (1.0-percentageX)), 400 - self.margin)
+        x1Value = min(max(self.margin, pos.x()), 400 - self.margin)
+        y1Value = min(max(self.margin, pos.y()), 400 - self.margin)
+        
+        x2Value = min(max(self.margin, 400 * (1.0 - percentageY)), 400 - self.margin)
+        y2Value = min(max(self.margin, 400 * (1.0 - percentageX)), 400 - self.margin)
 
         self.x1 = x1Value
-        self.x2 = x2Value 
-        
         self.y1 = y1Value
-        self.y2 = y2Value 
+        
+        self.x2 = x2Value 
+        self.y2 = y2Value
             
         self.update() # Repaint
 
