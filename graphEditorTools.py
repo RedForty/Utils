@@ -108,7 +108,7 @@ def restore_ge_selection(func):
         for curve_name in selected_curve_names:
             keys = cmds.keyframe(curve_name, q=True, selected=True, indexValue=True)
             selection_data[curve_name] = [int(x) for x in keys]
-        
+
         try: # Do the original function
             return func(*args, **kwargs)
         except Exception:
@@ -157,11 +157,11 @@ def flexible_isolate_select():
     currentPanel  = cmds.getPanel(withFocus=True)
     model_panels  = cmds.getPanel(type='modelPanel')
     graph_editors = cmds.getPanel(scriptType='graphEditor')
-    
+
     if currentPanel in model_panels:
         do_viewport_isolate(currentPanel)
     elif currentPanel in graph_editors:
-        do_ge_isolate()        
+        do_ge_isolate()
 
 def do_viewport_isolate(currentPanel):
     if cmds.ls(sl=1) == []:
@@ -175,7 +175,7 @@ def do_viewport_isolate(currentPanel):
         cmds.isolateSelect(currentPanel, update=True)
 
 # @restore_ge_selection # Broken in 2018
-@undo        
+@undo
 def do_ge_isolate():
     # GE isolating acts differently. There is a job number for it so just toggle it.
     gUnisolateJobNum = mel.eval('global int $gUnisolateJobNum; $isotemp=$gUnisolateJobNum;')
@@ -230,14 +230,14 @@ def tangent_auto():
     cmds.keyTangent(inTangentType='auto', outTangentType='auto')
 def tangent_stepped():
     cmds.keyTangent(inTangentType='stepnext', outTangentType='step')
-# = # 
+# = #
 def tangent_free():
     cmds.keyTangent(weightLock=False)
 def tangent_lock():
     cmds.keyTangent(weightLock=True)
-# = # 
+# = #
 def tangent_PRESS():
-    ''' 
+    '''
     #  Used to fix a bug in maya, but no longer needed from 2018 onward
     crvs = cmds.keyframe(q=True, sl=True, name=True)
     for crv in crvs:
@@ -306,6 +306,10 @@ def buffer_curve_swap():
     cmds.bufferCurve(animation='keys', swap=True)
 
 def toggle_normalized():
+    stacked_state    = cmds.animCurveEditor( ANIM_CURVE_EDITOR
+                                           , query=True
+                                           , stackedCurves=True
+                                           )
     normalized_state = cmds.animCurveEditor( ANIM_CURVE_EDITOR
                                            , query=True
                                            , displayNormalized=True
@@ -313,11 +317,40 @@ def toggle_normalized():
     cmds.animCurveEditor( ANIM_CURVE_EDITOR
                         , edit=True
                         , displayNormalized=not(normalized_state)
+                        , stackedCurves=False
                         )
 
 
+def deselect_outside_keys():
+    # Get all selected animation curves in the Graph Editor
+    selected_curves = cmds.keyframe(query=True, selected=True, name=True)
+
+    if not selected_curves:
+        cmds.warning("No keys are selected.")
+        return
+
+    keys_to_select = {}
+
+    for curve in selected_curves:
+        # Get the indices of all selected keys for the current curve
+        selected_keys = cmds.keyframe(curve, query=True, selected=True, indexValue=True)
+
+        if not selected_keys or len(selected_keys) <= 2:
+            # Skip if there are no keys or only two or fewer keys (nothing to unselect)
+            continue
+        keys_to_select[curve] = selected_keys[1:-1]
+
+    # Clear the selection on this curve
+    cmds.selectKey(clear=True)
+
+    # Re-select all keys except the first and last
+    for curve, keys in keys_to_select.items():
+        cmds.selectKey(curve, index=(keys[0], keys[-1]), add=True)
+
+    cmds.warning("First and last keys of each selected curve have been unselected.")
+
 # ---------------------------------------------------------------------------- #
-# Weight current tangent handle to 0.0 
+# Weight current tangent handle to 0.0
 
 @undo
 def scale_tangent_to_value(value):
@@ -332,10 +365,10 @@ def scale_tangent_to_value(value):
             keys_selected[channel][float(key)]['tangent_angles']  = cmds.keyTangent(channel, index=(float(key),), q=True, inAngle=True, outAngle=True)
             keys_selected[channel][float(key)]['tangent_weights'] = cmds.keyTangent(channel, index=(float(key),), q=True, inWeight=True, outWeight=True)
             keys_selected[channel][float(key)]['lock']            = cmds.keyTangent(channel, index=(float(key),), q=True, lock=True)
-    
+
             cmds.keyTangent(channel, index=(float(key),), itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1]) # This breaks in 2020
             # cmds.keyTangent(itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1])
-    
+
     keys_modified = Vividict()
     for channel in current_channels:
         keys = cmds.keyframe(channel, q=True, selected=True, indexValue=True)
@@ -359,7 +392,7 @@ def scale_tangent_to_value(value):
 
 
 # ---------------------------------------------------------------------------- #
-# Angle current tangent handle to a value 
+# Angle current tangent handle to a value
 
 def map_from_to(value, leftMin, leftMax, rightMin, rightMax):
     # Figure out how 'wide' each range is
@@ -393,7 +426,7 @@ def get_anim_data():
                 keys_selected[channel][key]['tangent_direction_up'] = True
             else:
                 keys_selected[channel][key]['tangent_direction_up'] = False
-            
+
             in_tangent_index  = IN_TANGENT_TYPES.index(tangent_types[0])
             out_tangent_index = OUT_TANGENT_TYPES.index(tangent_types[-1])
             cmds.keyTangent( channel
@@ -402,7 +435,7 @@ def get_anim_data():
                            , outTangentType=OUT_TANGENT_TYPES[out_tangent_index-1]
                            )
             modified_tangent_types = cmds.keyTangent(channel, index=(key,), q=True, inTangentType=True, outTangentType=True)
-            
+
             if modified_tangent_types[0] != keys_selected[channel][key]['tangent_types'][0]:
                 keys_selected[channel][key]['tangent_selected'][0] = 1
             if modified_tangent_types[-1] != keys_selected[channel][key]['tangent_types'][-1]:
@@ -471,7 +504,7 @@ def crop_cycle():
     START_FRAME = cmds.playbackOptions(q=True, minTime=True)
     global END_FRAME
     END_FRAME = cmds.playbackOptions(q=True, maxTime=True)
-    
+
     ctrls = cmds.ls(sl=True)
     if not ctrls:
         print("No controls selected!")
@@ -512,7 +545,7 @@ def _normalize_cycle(curve):
     if first_key >= START_FRAME and last_key > END_FRAME:
         # Normalize post-end-frame
         cmds.setKeyframe(curve, time=(END_FRAME,), insert=True)
-        
+
         # Save tangent info
         tangent_data = _save_tangent_data(curve, last_key)
         # Apply tangent info
@@ -522,7 +555,7 @@ def _normalize_cycle(curve):
         cmds.keyTangent(curve, e=True, time=(first_key,), inAngle=tangent_data[curve, last_key]['in_angle'][0])
         if tangent_data[curve, last_key]['weighted'][0]:
             cmds.keyTangent(curve, e=True, time=(first_key,), inWeight=tangent_data[curve, last_key]['in_weight'][0])
-        
+
         # Save tangent info
         tangent_data = _save_tangent_data(curve, first_key)
         # Apply tangent info
@@ -564,7 +597,7 @@ def _normalize_cycle(curve):
     # Then check the curve and add it to the list if it doesn't cycle
     value_start = cmds.keyframe(curve, q=True, time=(START_FRAME,), valueChange=True)
     value_end = cmds.keyframe(curve, q=True, time=(END_FRAME,), valueChange=True)
-    
+
     if abs(value_start[0] - value_end[0]) > TOLERANCE: # Because of floating point numbers
         NON_CYCLING_CURVES.append(curve)
 
@@ -588,14 +621,14 @@ def _save_tangent_data(curve, time):
 # Based on ack_SliceCurves
 @undo
 def slice_curves():
-    sel = cmds.ls(sl=1)
+    sel = cmds.ls(sl=1, long=True) # full paths
     if not sel: return None
 
     objects_to_skip = []
     # Does the object have a key on it to begin with?
     for obj in sel:
         shape_keyables = []
-        shapes = cmds.listRelatives(obj, shapes=True)
+        shapes = cmds.listRelatives(obj, shapes=True, fullPath=True) or [] # full paths
         for shape in shapes:
             # shape = 'ARCT_WelderBot_01_rig:backFoot_01FK_L_CTRLShape1'
             keyCountShape = cmds.keyframe(shape, q=True, kc=True, shape=True)
@@ -643,7 +676,7 @@ def slice_curves():
                     channelbox_selection.append(obj + "." + attr)
     if cb_attr_shapes:
         for obj in sel:
-            shape_nodes = cmds.listRelatives(obj, shapes=True)
+            shape_nodes = cmds.listRelatives(obj, shapes=True, fullPath=True)
             for shape_node in shape_nodes:
                 for attr in cb_attr_shapes:
                     if cmds.objExists(shape_node + "." + attr):
@@ -676,6 +709,77 @@ def _get_selected_channels():
     attrs_shape = cmds.channelBox(CHANNELBOX, q=True, ssa=True) or []
     return attrs_main, attrs_shape
 
+def toggle_lock_selected_channels():
+    selection = cmds.ls(sl=1)
+    if not selection: return
+    channelbox_selection = []
+    cb_attr_main, cb_attr_shapes = _get_selected_channels()
+    if cb_attr_main:
+        for obj in selection:
+            for attr in cb_attr_main:
+                if cmds.objExists(obj + "." + attr):
+                    channelbox_selection.append(obj + "." + attr)
+    if cb_attr_shapes:
+        for obj in selection:
+            shape_nodes = cmds.listRelatives(obj, shapes=True)
+            for shape_node in shape_nodes:
+                for attr in cb_attr_shapes:
+                    if cmds.objExists(shape_node + "." + attr):
+                        channelbox_selection.append(shape_node + "." + attr)
+
+    if channelbox_selection:
+        lock_state = cmds.getAttr(channelbox_selection[0], lock=True)
+        for attr in channelbox_selection:
+            cmds.setAttr(attr, e=True, lock=not lock_state)
+    else:
+        is_locked = False
+        for obj in selection:
+            attributes = cmds.listAttr(obj, keyable=True) or []
+            locked_attributes = cmds.listAttr(obj, locked=True) or []
+            if locked_attributes: is_locked = True
+        for obj in selection:
+            for attribute in attributes:
+                if is_locked:
+                    cmds.setAttr(obj + '.' + attribute, e=True, lock=False)
+                else:
+                    cmds.setAttr(obj + '.' + attribute, e=True, lock=True)
+
+
+def toggle_mute_selected_channels():
+    selection = cmds.ls(sl=1)
+    if not selection: return
+    channelbox_selection = []
+    cb_attr_main, cb_attr_shapes = _get_selected_channels()
+    if cb_attr_main:
+        for obj in selection:
+            for attr in cb_attr_main:
+                if cmds.objExists(obj + "." + attr):
+                    channelbox_selection.append(obj + "." + attr)
+    if cb_attr_shapes:
+        for obj in selection:
+            shape_nodes = cmds.listRelatives(obj, shapes=True)
+            for shape_node in shape_nodes:
+                for attr in cb_attr_shapes:
+                    if cmds.objExists(shape_node + "." + attr):
+                        channelbox_selection.append(shape_node + "." + attr)
+
+    if channelbox_selection:
+        is_muted = cmds.mute(channelbox_selection[0], q=True)
+        for attr in channelbox_selection:
+            if is_muted:
+                cmds.mute(attr, disable=True)
+            else:
+                cmds.mute(attr)
+    else:
+        for obj in selection:
+            attributes = cmds.listAttr(obj, keyable=True) or []
+        if any([cmds.mute(obj + '.' + attr, q=True) for attr in attributes]):
+            cmds.mute(obj, disable=True)
+        else:
+            cmds.mute(obj)
 
 
 # EoF
+if __name__ == "__main__":
+    from klugTools import graphEditorTools
+    reload(graphEditorTools)
