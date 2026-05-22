@@ -356,39 +356,46 @@ def deselect_outside_keys():
 def scale_tangent_to_value(value):
     current_channels = cmds.keyframe(q=True, selected=True, name=True)
     if not current_channels: print("Only works on selected keys/curves"); return
+
+    # Capture the original state of every selected key.
     keys_selected = Vividict()
     for channel in current_channels:
         keys = cmds.keyframe(channel, q=True, selected=True, indexValue=True)
         for key in keys:
-            tangent_type = cmds.keyTangent(channel, index=(float(key),), q=True, itt=True, ott=True)
-            keys_selected[channel][float(key)]['tangent_types']   = tangent_type
-            keys_selected[channel][float(key)]['tangent_angles']  = cmds.keyTangent(channel, index=(float(key),), q=True, inAngle=True, outAngle=True)
-            keys_selected[channel][float(key)]['tangent_weights'] = cmds.keyTangent(channel, index=(float(key),), q=True, inWeight=True, outWeight=True)
-            keys_selected[channel][float(key)]['lock']            = cmds.keyTangent(channel, index=(float(key),), q=True, lock=True)
+            key = float(key)
+            keys_selected[channel][key]['tangent_types']   = cmds.keyTangent(channel, index=(key,), q=True, itt=True, ott=True)
+            keys_selected[channel][key]['tangent_angles']  = cmds.keyTangent(channel, index=(key,), q=True, inAngle=True, outAngle=True)
+            keys_selected[channel][key]['tangent_weights'] = cmds.keyTangent(channel, index=(key,), q=True, inWeight=True, outWeight=True)
+            keys_selected[channel][key]['lock']            = cmds.keyTangent(channel, index=(key,), q=True, lock=True)
+            keys_selected[channel][key]['handle_selected'] = [False, False]
 
-            cmds.keyTangent(channel, index=(float(key),), itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1]) # This breaks in 2020
-            # cmds.keyTangent(itt=IN_TANGENT_TYPES[IN_TANGENT_TYPES.index(tangent_type[0])-1], ott=OUT_TANGENT_TYPES[OUT_TANGENT_TYPES.index(tangent_type[-1])-1])
+    # Setting a tangent type WITHOUT an index only touches the handles that are
+    # actually selected in the Graph Editor, so probing reveals which handle the
+    # animator grabbed. Two passes guarantee every selected handle differs from
+    # its original type in at least one pass.
+    for itt_probe, ott_probe in (('spline', 'spline'), ('linear', 'linear')):
+        cmds.keyTangent(itt=itt_probe, ott=ott_probe)
+        for channel in current_channels:
+            for key in keys_selected[channel]:
+                probed = cmds.keyTangent(channel, index=(key,), q=True, itt=True, ott=True)
+                if probed[0]  != keys_selected[channel][key]['tangent_types'][0]:
+                    keys_selected[channel][key]['handle_selected'][0] = True
+                if probed[-1] != keys_selected[channel][key]['tangent_types'][-1]:
+                    keys_selected[channel][key]['handle_selected'][-1] = True
 
-    keys_modified = Vividict()
+    # Restore everything, then zero the weight of only the selected handle(s).
     for channel in current_channels:
-        keys = cmds.keyframe(channel, q=True, selected=True, indexValue=True)
-        for key in keys:
-            keys_modified[channel][float(key)]['tangent_types'] = cmds.keyTangent(channel, index=(float(key),), q=True, itt=True, ott=True)
-
-    for channel, keys in keys_modified.items():
-        for key in keys:
-            cmds.keyTangent(channel, index=(key ,), lock=False)
-            if keys_modified[channel][key]['tangent_types'][0] != keys_selected[channel][key]['tangent_types'][0]:
-                cmds.keyTangent(channel, index=(key ,), itt=keys_selected[channel][key]['tangent_types'][0])
-                cmds.keyTangent(channel, index=(key ,), inAngle=keys_selected[channel][key]['tangent_angles'][0])
-                cmds.keyTangent(channel, index=(key ,), inWeight=keys_selected[channel][key]['tangent_weights'][0])
-                cmds.keyTangent(channel, index=(key ,), inWeight=value)
-            if keys_modified[channel][key]['tangent_types'][-1] != keys_selected[channel][key]['tangent_types'][-1]:
-                cmds.keyTangent(channel, index=(key ,), ott=keys_selected[channel][key]['tangent_types'][-1])
-                cmds.keyTangent(channel, index=(key ,), outAngle=keys_selected[channel][key]['tangent_angles'][-1])
-                cmds.keyTangent(channel, index=(key ,), outWeight=keys_selected[channel][key]['tangent_weights'][-1])
-                cmds.keyTangent(channel, index=(key ,), outWeight=value)
-            cmds.keyTangent(channel, index=(key ,), lock=keys_selected[channel][key]['lock'][0])
+        for key in keys_selected[channel]:
+            data = keys_selected[channel][key]
+            cmds.keyTangent(channel, index=(key,), lock=False)
+            cmds.keyTangent(channel, index=(key,), itt=data['tangent_types'][0],  ott=data['tangent_types'][-1])
+            cmds.keyTangent(channel, index=(key,), inAngle=data['tangent_angles'][0],   outAngle=data['tangent_angles'][-1])
+            cmds.keyTangent(channel, index=(key,), inWeight=data['tangent_weights'][0],  outWeight=data['tangent_weights'][-1])
+            if data['handle_selected'][0]:
+                cmds.keyTangent(channel, index=(key,), inWeight=value)
+            if data['handle_selected'][-1]:
+                cmds.keyTangent(channel, index=(key,), outWeight=value)
+            cmds.keyTangent(channel, index=(key,), lock=data['lock'][0])
 
 
 # ---------------------------------------------------------------------------- #
